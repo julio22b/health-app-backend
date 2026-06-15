@@ -5,7 +5,10 @@
     "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "dev": "nodemon --exec 'node --loader ts-node/esm --no-warnings' src/index.ts"
+        "dev": "nodemon --exec 'node --import tsx --no-warnings' src/index.ts"
+    },
+    "engines": {
+        "node": ">=20.0.0"
     },
     "keywords": [],
     "author": "",
@@ -28,7 +31,7 @@
         "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^25.9.3",
         "nodemon": "^3.1.14",
-        "ts-node": "^10.9.2",
+        "tsx": "^4.22.4",
         "typescript": "^6.0.3"
     }
 }

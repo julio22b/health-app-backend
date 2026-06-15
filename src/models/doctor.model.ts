@@ -11,6 +11,16 @@ export const findDoctorByUsername = async (username: string): Promise<Doctor | n
     return doctor;
 };
 
+export const findDoctorById = async (id: number): Promise<Doctor | null> => {
+    const doctor = await prisma.doctor.findUnique({
+        where: {
+            id,
+        },
+    });
+
+    return doctor;
+};
+
 export const createDoctor = async (data: Prisma.DoctorCreateInput): Promise<Doctor> => {
     const doctor = await prisma.doctor.create({
         data,
