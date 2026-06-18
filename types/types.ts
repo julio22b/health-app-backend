@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 
-interface AuthenticatedRequest<T = any> extends Request<object, any, T> {
+interface AuthenticatedRequest<T = object> extends Request<object, object, T> {
     doctor?: { id: number };
 }
 
@@ -8,4 +8,8 @@ interface CreateConsultationBody {
     patientId: string;
 }
 
-export type { AuthenticatedRequest, CreateConsultationBody };
+interface ProcessConsultationBody {
+    consultationId: string;
+}
+
+export type { AuthenticatedRequest, CreateConsultationBody, ProcessConsultationBody };

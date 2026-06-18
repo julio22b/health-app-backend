@@ -4,7 +4,7 @@ import { type Request, type Response } from 'express';
 import { createDoctor, findDoctorByUsername } from '../models/doctor.model.js';
 import type { Prisma } from '../generated/prisma/index.js';
 
-const registerDoctor = async (req: Request<object, any, Prisma.DoctorCreateInput>, res: Response): Promise<void> => {
+const registerDoctor = async (req: Request<object, object, Prisma.DoctorCreateInput>, res: Response): Promise<void> => {
     try {
         const { username, password, name, specialty = '' } = req.body;
         if (!username || !password || !name) {
@@ -74,7 +74,7 @@ const loginDoctor = async (req: Request, res: Response): Promise<void> => {
         });
 
         res.status(200).json({ message: 'Login successful', doctor: doctorWithoutPassword, token });
-    } catch (error) {
+    } catch (_) {
         res.status(500).json({ error: 'Something went wrong' });
     }
 };

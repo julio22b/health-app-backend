@@ -27,6 +27,7 @@ model Patient {
   doctor Doctor @relation(fields: [doctor_id], references: [id])
   consultations Consultation[]
   created_at DateTime @default(now())
+  last_visit DateTime?
 }
 
 model Consultation {
