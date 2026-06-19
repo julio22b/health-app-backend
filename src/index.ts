@@ -2,7 +2,7 @@ process.on('uncaughtException', (err) => {
     console.error('Uncaught exception:', err);
 });
 import 'dotenv/config';
-import express, { type Request, type Response, type Application } from 'express';
+import express, { type Request, type Response, type Application, NextFunction } from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth.routes.js';
 import patientsRouter from './routes/patients.routes.js';
@@ -42,7 +42,7 @@ app.use('/auth', authRouter);
 app.use('/patients', authenticationMiddleware, patientsRouter);
 app.use('/consultations', authenticationMiddleware, consultationsRouter);
 
-app.use((err: Error, _: Request, res: Response) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     console.error('Unhandled error:', err);
     res.status(500).send('Error. Check logs.');
 });
