@@ -6,4 +6,6 @@ const router = express.Router();
 
 router.post('/', upload.single('audioFile'), consultationsControllers.createConsultation);
 
+router.post('/process', consultationsControllers.processConsultation);
+
 export default router;
