@@ -42,3 +42,15 @@ export const changeConsultationStatus = async (newStatus: Status, consultationId
 
     return consultation;
 };
+
+export const updateConsultation = async (data: Prisma.ConsultationUpdateInput, consultationId: number) => {
+    const updatedConsultation = await prisma.consultation.update({
+        where: {
+            id: consultationId,
+        },
+        data,
+        include: { documents: true, patient: true },
+    });
+
+    return updatedConsultation;
+};

@@ -3,9 +3,10 @@ import {
     changeConsultationStatus,
     createConsultation as createConsultationInDB,
     searchConsultationById,
+    updateConsultation,
 } from '../models/consultation.model.js';
 import type { AuthenticatedRequest, CreateConsultationBody, ProcessConsultationBody } from '../types/types.js';
-import { uploadFromBuffer } from '../config/cloudinary.js';
+import { uploadFromBuffer, deleteFromCloudinary, extractCloudinaryPublicId } from '../config/cloudinary.js';
 import openai from '../config/openai.js';
 import { toFile } from 'openai';
 import { createDocument } from '../models/documents.model.js';
@@ -56,12 +57,12 @@ const processConsultation = async (req: AuthenticatedRequest<ProcessConsultation
             return;
         }
 
-        await changeConsultationStatus('PROCESSING', Number(consultationId));
-
         if (!consultation.audio_url) {
             res.status(400).json({ error: 'Consultation has no audio file' });
             return;
         }
+
+        await changeConsultationStatus('PROCESSING', Number(consultationId));
 
         const audioResponse = await fetch(consultation.audio_url);
         const audioBlob = await audioResponse.blob();
@@ -153,4 +154,57 @@ PLAN:
     }
 };
 
-export default { createConsultation, processConsultation };
+const uploadConsultationAudio = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const id = Number(req.params.id);
+
+        if (!req.file) {
+            res.status(400).json({ error: 'Audio file is required' });
+            return;
+        }
+
+        const consultation = await searchConsultationById(id);
+        if (!consultation) {
+            res.status(400).json({ error: 'Consultation does not exist' });
+            return;
+        }
+
+        if (!isOwnedByDoctor(res, consultation.patient.doctor_id, req.doctor!.id)) {
+            return;
+        }
+
+        const oldPublicId = consultation.audio_url ? extractCloudinaryPublicId(consultation.audio_url) : null;
+
+        const audioUpload = await uploadFromBuffer(req.file.buffer);
+
+        let updatedConsultation;
+        try {
+            // NOTE: consultation status is intentionally left unchanged here.
+            // status ideally belongs at the document level since one consultation
+            // can have multiple documents in different states. Kept at consultation
+            // level for v1 simplicity.
+            updatedConsultation = await updateConsultation({ audio_url: audioUpload.secure_url }, id);
+        } catch (dbError) {
+            deleteFromCloudinary(audioUpload.public_id).catch((err) =>
+                console.error('Failed to delete orphaned Cloudinary asset:', err),
+            );
+            throw dbError;
+        }
+
+        if (oldPublicId) {
+            deleteFromCloudinary(oldPublicId).catch((err) =>
+                console.error('Failed to delete old Cloudinary asset:', err),
+            );
+        }
+
+        res.status(200).json({
+            message: 'Consultation audio uploaded successfully',
+            consultation: updatedConsultation,
+        });
+    } catch (error) {
+        console.error('Upload consultation audio error:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+};
+
+export default { createConsultation, processConsultation, uploadConsultationAudio };

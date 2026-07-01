@@ -8,4 +8,6 @@ router.post('/', upload.single('audioFile'), consultationsControllers.createCons
 
 router.post('/process', consultationsControllers.processConsultation);
 
+router.patch('/:id/audio', upload.single('audioFile'), consultationsControllers.uploadConsultationAudio);
+
 export default router;
