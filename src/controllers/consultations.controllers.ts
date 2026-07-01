@@ -7,10 +7,10 @@ import {
 } from '../models/consultation.model.js';
 import type { AuthenticatedRequest, CreateConsultationBody, ProcessConsultationBody } from '../types/types.js';
 import { uploadFromBuffer, deleteFromCloudinary, extractCloudinaryPublicId } from '../config/cloudinary.js';
-import openai from '../config/openai.js';
-import { toFile } from 'openai';
 import { createDocument } from '../models/documents.model.js';
 import { isOwnedByDoctor } from '../lib/authorization.js';
+import genai, { getSystemPrompt } from '../config/gemini.js';
+import { Type } from '@google/genai';
 
 const createConsultation = async (req: AuthenticatedRequest<CreateConsultationBody>, res: Response) => {
     try {
@@ -65,87 +65,60 @@ const processConsultation = async (req: AuthenticatedRequest<ProcessConsultation
         await changeConsultationStatus('PROCESSING', Number(consultationId));
 
         const audioResponse = await fetch(consultation.audio_url);
-        const audioBlob = await audioResponse.blob();
+        const arrayBuffer = await audioResponse.arrayBuffer();
+        const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
-        // const transcript = await openai.audio.transcriptions.create({
-        //     file: await toFile(audioBlob, 'consultation.webm', { type: 'audio/webm' }),
-        //     model: 'whisper-1',
-        //     language: 'es',
-        // });
-
-        // console.log(transcript);
-
-        // const gptDocument = await openai.chat.completions.create({
-        //     model: 'gpt-4o',
-        //     messages: [
-        //         {
-        //             role: 'system',
-        //             content: `You are a clinical documentation assistant. Based on the consultation transcript provided, generate a structured medical document in Spanish. Document type: ${documentType}
-
-        //             Guidelines per type:
-        //             - MEDICAL_HISTORY: Include chief complaint, history of present illness, past medical history, medications, allergies, family history, social history, review of systems, physical examination findings, and assessment.
-        //             - PROGRESS_NOTE: Follow SOAP format — Subjective, Objective, Assessment, Plan.
-        //             - DISCHARGE_SUMMARY: Include admission date, discharge date, diagnosis, procedures performed, hospital course, discharge condition, and follow-up instructions.
-
-        //             Return only the document content in plain text. Do not include any preamble or explanation.`,
-        //         },
-        //         { role: 'user', content: transcript.text },
-        //     ],
-        // });
-        // MOCK - remove when OpenAI billing is sorted
-        const transcript = {
-            text: 'Paciente masculino de 45 años que consulta por dolor abdominal de 3 días de evolución. Refiere dolor en epigastrio, náuseas y fiebre de 38.5°C. Sin antecedentes de importancia.',
-        };
-
-        const gptDocument = {
-            choices: [
+        const result = await genai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: [
                 {
-                    message: {
-                        content: `HISTORIA MÉDICA
-
-Fecha: ${new Date().toLocaleDateString('es-VE')}
-Paciente: ${consultation.patient?.name}
-
-MOTIVO DE CONSULTA:
-Dolor abdominal de 3 días de evolución.
-
-ENFERMEDAD ACTUAL:
-Paciente refiere dolor en epigastrio de inicio hace 3 días, de carácter opresivo, intensidad 7/10, acompañado de náuseas y fiebre de 38.5°C.
-
-EVALUACIÓN:
-Abdomen doloroso a la palpación en epigastrio. Murphy negativo. Sin signos de irritación peritoneal.
-
-PLAN:
-- Laboratorios: BHC, QS, amilasa, lipasa
-- Ecografía abdominal
-- Analgesia y antieméticos
-- Control en 24 horas`,
+                    text: getSystemPrompt(documentType),
+                },
+                {
+                    inlineData: {
+                        mimeType: 'audio/webm',
+                        data: base64Audio,
                     },
                 },
             ],
-        };
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        transcript: { type: Type.STRING },
+                        document: { type: Type.STRING },
+                    },
+                    required: ['transcript', 'document'],
+                },
+            },
+        });
 
-        if (!gptDocument.choices[0].message.content) {
+        if (!result.text) {
+            console.error('Error generating content:', result);
             const failedDocument = await changeConsultationStatus('FAILED', Number(consultationId));
-            res.status(400).json({ error: 'Document creation failed', document: failedDocument });
+            res.status(500).json({ error: 'Error generating content', document: failedDocument });
             return;
         }
 
-        console.log(gptDocument.choices[0].message.content);
+        const { transcript, document } = JSON.parse(result.text);
 
-        const document = await createDocument({
+        const createdDocument = await createDocument({
             consultation: {
                 connect: { id: Number(consultationId) },
             },
             type: req.body.documentType,
-            content: gptDocument.choices[0].message.content,
+            content: document,
         });
 
-        const completedConsultation = await changeConsultationStatus('COMPLETED', Number(consultationId));
+        const completedConsultation = await updateConsultation(
+            { transcript_text: transcript, status: 'COMPLETED' },
+            Number(consultationId),
+        );
 
         res.status(200).json({
             message: 'Consultation processed successfully',
-            document,
+            document: createdDocument,
             consultation: completedConsultation,
         });
     } catch (error) {

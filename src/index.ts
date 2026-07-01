@@ -19,6 +19,7 @@ const requiredEnv = [
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
+    'GEN_AI_API_KEY',
 ];
 for (const envVar of requiredEnv) {
     if (!process.env[envVar]) {
