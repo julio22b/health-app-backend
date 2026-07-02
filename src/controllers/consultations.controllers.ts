@@ -65,6 +65,7 @@ const processConsultation = async (req: AuthenticatedRequest<ProcessConsultation
         await changeConsultationStatus('PROCESSING', Number(consultationId));
 
         const audioResponse = await fetch(consultation.audio_url);
+        const mimeType = audioResponse.headers.get('content-type') ?? 'audio/webm';
         const arrayBuffer = await audioResponse.arrayBuffer();
         const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
@@ -76,7 +77,7 @@ const processConsultation = async (req: AuthenticatedRequest<ProcessConsultation
                 },
                 {
                     inlineData: {
-                        mimeType: 'audio/webm',
+                        mimeType,
                         data: base64Audio,
                     },
                 },
